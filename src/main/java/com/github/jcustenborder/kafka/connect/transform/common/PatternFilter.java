@@ -54,14 +54,39 @@ public abstract class PatternFilter<R extends ConnectRecord<R>> implements Trans
   R filter(R record, Struct struct) {
     for (Field field : struct.schema().fields()) {
       if (this.config.fields.contains(field.name())) {
-        if (field.schema().type() == Schema.Type.STRING) {
-          String input = struct.getString(field.name());
-          if (null != input) {
-            Matcher matcher = this.config.pattern.matcher(input);
-            if (matcher.matches()) {
-              return null;
+        String input = null;
+        switch (field.schema().type()) {
+          case STRING:
+          case INT8:
+          case INT16:
+          case INT32:
+          case INT64:
+          case FLOAT32:
+          case FLOAT64:
+          case BOOLEAN:
+            input = struct.get(field.name()).toString();
+            break;
+          default:
+            // Skip handling of complex types
+            break;
+        }
+        
+        if (log.isTraceEnabled()) {
+          log.trace("value: {}, type: {}", input, field.schema().type());
+        }
+
+        if (null != input) {
+          Matcher matcher = this.config.pattern.matcher(input);
+          if (matcher.matches()) {
+            if (log.isTraceEnabled()) {
+              log.trace("Matched for record {}:{}:{}", record.timestamp(), record.kafkaPartition(), record.topic());
             }
+            return null;
           }
+        }
+        
+        if (log.isTraceEnabled()) {
+          log.trace("No input value to filter on for record ({}:{}:{})", record.timestamp(), record.kafkaPartition(), record.topic());
         }
       }
     }
@@ -77,8 +102,15 @@ public abstract class PatternFilter<R extends ConnectRecord<R>> implements Trans
           String input = (String) value;
           Matcher matcher = this.config.pattern.matcher(input);
           if (matcher.matches()) {
+            if (log.isTraceEnabled()) {
+              log.trace("Matched for record ({}:{}:{})", record.timestamp(), record.kafkaPartition(), record.topic());
+            }
             return null;
           }
+        }
+        
+        if (log.isTraceEnabled()) {
+          log.trace("No input value to filter on for record ({}:{}:{})", record.timestamp(), record.kafkaPartition(), record.topic());
         }
       }
     }
